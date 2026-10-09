@@ -40,6 +40,8 @@ jobs:
           components: rustfmt
       - name: Rustfmt
         run: cargo fmt --check
+      - name: Rustfmt (provider consumer)
+        run: cargo fmt --manifest-path tests/rustls-provider/Cargo.toml --check
 
   msrv:
     name: MSRV (1.88)
@@ -84,6 +86,24 @@ jobs:
         run: cargo test --no-default-features --features rustls,chrono,time,tds73 --lib
       - name: Unit tests (rustls-webpki-roots)
         run: cargo test --no-default-features --features rustls-webpki-roots,chrono,time,tds73 --lib
+      - name: Unit tests (rustls-no-provider)
+        run: cargo test --no-default-features --features rustls-no-provider,chrono,time,tds80 --lib
+      - name: Provider-neutral consumer graph
+        shell: bash
+        run: |
+          cargo check --manifest-path tests/rustls-provider/Cargo.toml --tests
+          cargo tree --manifest-path tests/rustls-provider/Cargo.toml --edges normal --prefix none > provider-tree.txt
+          if grep -E '^(aws-lc-rs|aws-lc-sys|ring|openssl|openssl-sys|symcrypt|symcrypt-sys) v' provider-tree.txt; then
+            echo "provider-neutral consumer unexpectedly includes a crypto backend"
+            exit 1
+          fi
+      # Separate integration binaries isolate rustls' process-global provider.
+      - name: Consumer provider contracts
+        run: |
+          cargo test --manifest-path tests/rustls-provider/Cargo.toml
+          cargo test --manifest-path tests/rustls-provider/Cargo.toml --features ring
+          cargo test --manifest-path tests/rustls-provider/Cargo.toml --features aws-lc
+          cargo test --manifest-path tests/rustls-provider/Cargo.toml --features openssl
 
   semver:
     name: semver-checks (advisory)
